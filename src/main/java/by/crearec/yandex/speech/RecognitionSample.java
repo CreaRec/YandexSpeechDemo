@@ -2,8 +2,10 @@ package by.crearec.yandex.speech;
 
 import by.crearec.yandex.speech.dto.AudioDTO;
 import by.crearec.yandex.speech.dto.ConfigDTO;
-import by.crearec.yandex.speech.dto.LongSpeechRecognitionRequestDTO;
-import by.crearec.yandex.speech.dto.LongSpeechRecognitionResponseDTO;
+import by.crearec.yandex.speech.dto.LongRecognitionRequestDTO;
+import by.crearec.yandex.speech.dto.OperationDTO;
+import by.crearec.yandex.speech.dto.ResponseDTO;
+import by.crearec.yandex.speech.dto.ResultRecognitionResponseDTO;
 import by.crearec.yandex.speech.dto.SpecificationDTO;
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.auth.AWSCredentials;
@@ -13,7 +15,9 @@ import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.Bucket;
 import com.amazonaws.services.s3.model.PutObjectRequest;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import org.apache.http.HttpEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
@@ -27,13 +31,13 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URL;
 
-public class Main {
+public class RecognitionSample {
 	private static final String TEST_BUCKET_NAME = "test-bucket";
 	private static final String TOP_DIRECTORY_NAME = "records";
 	private static final String YANDEX_SPEECH_KIT_URL_1 = "https://transcribe.api.cloud.yandex.net/speech/stt/v2/longRunningRecognize";
 	private static final String YANDEX_SPEECH_KIT_URL_2 = "https://operation.api.cloud.yandex.net/operations/";
 	private static final String AUTH_HEADER = "Authorization";
-	private static final String AUTH_KEY = "Api-Key ";
+	private static final String AUTH_KEY = "Api-Key AQVNw3asc0hl-EjbkBQKAB_ZbF0v-nWLPcYjAKPD";
 
 	public static void main(String[] args) throws IOException, InterruptedException {
 		AWSCredentials credentials;
@@ -58,10 +62,10 @@ public class Main {
 			s3.putObject(new PutObjectRequest(TEST_BUCKET_NAME, key, audioFile));
 			URL url = s3.getUrl(TEST_BUCKET_NAME, key);
 
-			LongSpeechRecognitionRequestDTO request = new LongSpeechRecognitionRequestDTO();
+			LongRecognitionRequestDTO request = new LongRecognitionRequestDTO();
 			ConfigDTO config = new ConfigDTO();
 			SpecificationDTO specification = new SpecificationDTO();
-			specification.setAudioChannelCount(2);
+			specification.setAudioChannelCount(1);
 			specification.setAudioEncoding("OGG_OPUS");
 			specification.setLanguageCode("ru-RU");
 			specification.setProfanityFilter(false);
@@ -73,6 +77,8 @@ public class Main {
 			request.setAudio(audio);
 
 			ObjectMapper objectMapper = new ObjectMapper();
+			objectMapper.enable(SerializationFeature.INDENT_OUTPUT);
+			objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 			try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
 				HttpPost httpRequest = new HttpPost(YANDEX_SPEECH_KIT_URL_1);
 				httpRequest.addHeader(AUTH_HEADER, AUTH_KEY);
@@ -82,10 +88,10 @@ public class Main {
 				try (CloseableHttpResponse closeableHttpResponse = httpClient.execute(httpRequest)) {
 					HttpEntity entity = closeableHttpResponse.getEntity();
 					if (entity != null) {
-						LongSpeechRecognitionResponseDTO response = objectMapper.readValue(entity.getContent(), LongSpeechRecognitionResponseDTO.class);
+						OperationDTO response = objectMapper.readValue(entity.getContent(), OperationDTO.class);
 						if (response != null && response.getError() == null) {
 							operationId = response.getId();
-							Thread.sleep(5000);
+							Thread.sleep(10000);
 						}
 					}
 				}
@@ -95,21 +101,23 @@ public class Main {
 					try (CloseableHttpResponse closeableHttpResponse = httpClient.execute(httpGet)) {
 						HttpEntity entity = closeableHttpResponse.getEntity();
 						if (entity != null) {
-							LongSpeechRecognitionResponseDTO response = objectMapper.readValue(entity.getContent(), LongSpeechRecognitionResponseDTO.class);
-							if (response != null && response.getError() == null) {
-								operationId = response.getId();
-								Thread.sleep(5000);
+							ResultRecognitionResponseDTO response = objectMapper.readValue(entity.getContent(), ResultRecognitionResponseDTO.class);
+							if (response != null && response.getError() == null && response.getDone() && response.getResponse() != null) {
+								ResponseDTO result = response.getResponse();
+								StringBuilder stringBuilder = new StringBuilder();
+								result.getChunks().forEach(item -> stringBuilder.append(item.getAlternatives().get(0).getText()).append(" "));
+								System.out.println(stringBuilder.toString());
 							}
 						}
 					}
 				}
-				// TODO: request text by operation ID
+				s3.deleteObject(TEST_BUCKET_NAME, key);
 			}
 		}
 	}
 
 	private static File getAudioFile() {
-		URL resource = Main.class.getClassLoader().getResource("test.ogg");
+		URL resource = RecognitionSample.class.getClassLoader().getResource("test.ogg");
 		if (resource != null) {
 			return new File(resource.getFile());
 		}

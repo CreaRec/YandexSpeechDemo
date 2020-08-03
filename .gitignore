@@ -1,2 +1,4 @@
 /src/main/resources/api-key
 /test-yandex-speech.iml
+/.idea/
+/target/

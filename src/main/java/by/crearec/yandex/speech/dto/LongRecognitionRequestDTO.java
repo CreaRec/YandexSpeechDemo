@@ -2,7 +2,7 @@ package by.crearec.yandex.speech.dto;
 
 import java.io.Serializable;
 
-public class LongSpeechRecognitionRequestDTO implements Serializable {
+public class LongRecognitionRequestDTO implements Serializable {
 	private static final long serialVersionUID = -6576947870657482188L;
 
 	private ConfigDTO config;
