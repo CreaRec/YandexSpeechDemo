@@ -7,6 +7,7 @@ import by.crearec.yandex.speech.dto.OperationDTO;
 import by.crearec.yandex.speech.dto.ResponseDTO;
 import by.crearec.yandex.speech.dto.ResultRecognitionResponseDTO;
 import by.crearec.yandex.speech.dto.SpecificationDTO;
+import by.crearec.yandex.speech.utils.Constants;
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
@@ -32,13 +33,6 @@ import java.io.IOException;
 import java.net.URL;
 
 public class RecognitionSample {
-	private static final String TEST_BUCKET_NAME = "test-bucket";
-	private static final String TOP_DIRECTORY_NAME = "records";
-	private static final String YANDEX_SPEECH_KIT_URL_1 = "https://transcribe.api.cloud.yandex.net/speech/stt/v2/longRunningRecognize";
-	private static final String YANDEX_SPEECH_KIT_URL_2 = "https://operation.api.cloud.yandex.net/operations/";
-	private static final String AUTH_HEADER = "Authorization";
-	private static final String AUTH_KEY = "Api-Key AQVNw3asc0hl-EjbkBQKAB_ZbF0v-nWLPcYjAKPD";
-
 	public static void main(String[] args) throws IOException, InterruptedException {
 		AWSCredentials credentials;
 		try {
@@ -52,15 +46,15 @@ public class RecognitionSample {
 		AmazonS3 s3 = AmazonS3ClientBuilder.standard().withCredentials(new AWSStaticCredentialsProvider(credentials))
 		                                   .withEndpointConfiguration(new AmazonS3ClientBuilder.EndpointConfiguration("storage.yandexcloud.net", "ru-central1")).build();
 
-		Bucket bucket = s3.listBuckets().stream().filter(item -> TEST_BUCKET_NAME.equals(item.getName())).findFirst().orElse(null);
+		Bucket bucket = s3.listBuckets().stream().filter(item -> Constants.TEST_BUCKET_NAME.equals(item.getName())).findFirst().orElse(null);
 		if (bucket == null) {
-			s3.createBucket(TEST_BUCKET_NAME);
+			s3.createBucket(Constants.TEST_BUCKET_NAME);
 		}
 		File audioFile = getAudioFile();
 		if (audioFile != null) {
-			String key = TOP_DIRECTORY_NAME + "/" + audioFile.getName();
-			s3.putObject(new PutObjectRequest(TEST_BUCKET_NAME, key, audioFile));
-			URL url = s3.getUrl(TEST_BUCKET_NAME, key);
+			String key = Constants.TOP_DIRECTORY_NAME + "/" + audioFile.getName();
+			s3.putObject(new PutObjectRequest(Constants.TEST_BUCKET_NAME, key, audioFile));
+			URL url = s3.getUrl(Constants.TEST_BUCKET_NAME, key);
 
 			LongRecognitionRequestDTO request = new LongRecognitionRequestDTO();
 			ConfigDTO config = new ConfigDTO();
@@ -80,8 +74,8 @@ public class RecognitionSample {
 			objectMapper.enable(SerializationFeature.INDENT_OUTPUT);
 			objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 			try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
-				HttpPost httpRequest = new HttpPost(YANDEX_SPEECH_KIT_URL_1);
-				httpRequest.addHeader(AUTH_HEADER, AUTH_KEY);
+				HttpPost httpRequest = new HttpPost(Constants.YANDEX_SPEECH_KIT_RUN_RECOGNIZE_URL);
+				httpRequest.addHeader(Constants.AUTH_HEADER, Constants.AUTH_KEY);
 				httpRequest.setEntity(new StringEntity(objectMapper.writeValueAsString(request), ContentType.APPLICATION_JSON));
 
 				String operationId = null;
@@ -96,8 +90,8 @@ public class RecognitionSample {
 					}
 				}
 				if (operationId != null) {
-					HttpGet httpGet = new HttpGet(YANDEX_SPEECH_KIT_URL_2 + operationId);
-					httpGet.addHeader(AUTH_HEADER, AUTH_KEY);
+					HttpGet httpGet = new HttpGet(Constants.YANDEX_SPEECH_KIT_RESULT_RECOGNIZE_URL + operationId);
+					httpGet.addHeader(Constants.AUTH_HEADER, Constants.AUTH_KEY);
 					try (CloseableHttpResponse closeableHttpResponse = httpClient.execute(httpGet)) {
 						HttpEntity entity = closeableHttpResponse.getEntity();
 						if (entity != null) {
@@ -111,7 +105,7 @@ public class RecognitionSample {
 						}
 					}
 				}
-				s3.deleteObject(TEST_BUCKET_NAME, key);
+				s3.deleteObject(Constants.TEST_BUCKET_NAME, key);
 			}
 		}
 	}
